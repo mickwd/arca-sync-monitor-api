@@ -1,0 +1,22 @@
+# Override para producción: ARCA y receptor reales (definidos en el .env), sin mock,
+# Postgres sin puerto expuesto y logs a CloudWatch.
+services:
+  api:
+    environment:
+      ENVIRONMENT: production
+      ARCA_BASE_URL: ${ARCA_BASE_URL:?Definir ARCA_BASE_URL}
+      RECEPTOR_BASE_URL: ${RECEPTOR_BASE_URL:?Definir RECEPTOR_BASE_URL}
+      DATABASE_URL: postgresql+psycopg://arca:${POSTGRES_PASSWORD}@postgres:5432/arca_sync
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-sa-east-1}
+        awslogs-group: /arca-sync/api
+        awslogs-create-group: "true"
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD}

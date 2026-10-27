@@ -1,0 +1,79 @@
+# Deploy a AWS EC2 al pushear un tag vX.Y.Z
+#
+# Secrets requeridos (Settings > Secrets and variables > Actions, environment "production"):
+#   EC2_HOST         IP o DNS público de la instancia
+#   EC2_USER         usuario SSH (ej. ubuntu)
+#   EC2_SSH_KEY      clave privada (formato OpenSSH) autorizada en la instancia
+#   EC2_KNOWN_HOSTS  salida de `ssh-keyscan -H <EC2_HOST>` (evita aceptar hosts desconocidos)
+#   APP_ENV_FILE     contenido completo del .env de producción
+#
+# La instancia necesita Docker + plugin compose y el directorio /opt/arca-sync
+# (ver deploy/ec2-bootstrap.sh).
+name: Deploy EC2
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: production
+    env:
+      TARGET: ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}
+      RELEASE: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Copiar release y .env a la instancia
+        env:
+          APP_ENV_FILE: ${{ secrets.APP_ENV_FILE }}
+        run: |
+          tar --exclude=.git --exclude=.venv --exclude=tests -czf /tmp/release.tar.gz .
+          scp -i ~/.ssh/deploy_key /tmp/release.tar.gz "$TARGET:/tmp/arca-sync-$RELEASE.tar.gz"
+          printf '%s\n' "$APP_ENV_FILE" | ssh -i ~/.ssh/deploy_key "$TARGET" \
+            "sudo tee /opt/arca-sync/shared/.env > /dev/null && sudo chmod 600 /opt/arca-sync/shared/.env"
+
+      - name: Activar release
+        run: ssh -i ~/.ssh/deploy_key "$TARGET" "bash -s -- $RELEASE" < deploy/remote_deploy.sh
+
+      - name: Verificar salud
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS "http://$HOST:8000/health/ready" && exit 0
+            sleep 2
+          done
+          echo "La API no respondió después del deploy"
+          exit 1
+
+      - name: Limpiar clave
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

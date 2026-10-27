@@ -1,0 +1,18 @@
+# Tareas programadas para un servidor Linux (instalar con: crontab -u arcasync scripts/crontab.example)
+# Formato: minuto hora día-mes mes día-semana comando
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# Backup diario a S3 a las 03:15
+15 3 * * * /opt/arca-sync/scripts/backup.sh >> /var/log/arca-sync/backup.log 2>&1
+
+# Alternativa al scheduler interno: disparar la sync cada 15 minutos vía API
+# (requiere SCHEDULER_ENABLED=false y las credenciales del cliente en /etc/arca-sync/client.env)
+*/15 * * * * . /etc/arca-sync/client.env && TOKEN=$(curl -sf -X POST http://localhost:8000/auth/token -d grant_type=client_credentials -d client_id="$CLIENT_ID" -d client_secret="$CLIENT_SECRET" | jq -r .access_token) && curl -sf -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8000/sync/run > /dev/null
+
+# Chequeo de monitoreo cada 5 minutos (si no se usa el scheduler interno)
+*/5 * * * * . /etc/arca-sync/client.env && TOKEN=$(curl -sf -X POST http://localhost:8000/auth/token -d grant_type=client_credentials -d client_id="$CLIENT_ID" -d client_secret="$CLIENT_SECRET" | jq -r .access_token) && curl -sf -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8000/monitoring/check > /dev/null
+
+# Limpieza de logs con más de 30 días
+0 4 * * 0 find /var/log/arca-sync -name "*.log.*" -mtime +30 -delete

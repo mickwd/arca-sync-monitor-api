@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BackupObjects",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::REEMPLAZAR-BUCKET/backups/*"
+    },
+    {
+      "Sid": "BackupList",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::REEMPLAZAR-BUCKET",
+      "Condition": { "StringLike": { "s3:prefix": ["backups/*"] } }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+# Hosts a monitorear. Tipos soportados:
+#   local -> el host donde corre la API (psutil). Sirve para Linux y Windows Server.
+#   ssh   -> servidor Linux remoto vía SSH (paramiko). No requiere agente.
+#
+# Los umbrales globales salen de las variables de entorno (CPU_WARNING, DISK_CRITICAL, etc.)
+# y se pueden sobreescribir por host en `thresholds`.
+
+hosts:
+  - name: api-local
+    type: local
+    services: []          # ej. [nginx, docker] en Linux o [W3SVC, MSSQLSERVER] en Windows
+
+  # - name: web-01
+  #   type: ssh
+  #   address: 10.0.1.15
+  #   port: 22
+  #   username: monitor
+  #   key_file: ~/.ssh/monitor_ed25519
+  #   strict_host_keys: true     # el host tiene que estar en known_hosts
+  #   services: [nginx, docker]
+  #   disks: ["/", "/var/lib/docker"]
+  #
+  # - name: db-01
+  #   type: ssh
+  #   address: 10.0.2.20
+  #   username: monitor
+  #   key_file: ~/.ssh/monitor_ed25519
+  #   services: [postgresql]
+  #   disks: ["/", "/var/lib/postgresql"]
+  #   thresholds:
+  #     disk: {warning: 70, critical: 85}
+  #     memory: {warning: 90, critical: 97}

@@ -1,0 +1,51 @@
+services:
+  api:
+    build: .
+    image: arca-sync-monitor-api:latest
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://arca:arca@postgres:5432/arca_sync
+      ARCA_BASE_URL: http://mock-arca:5001
+      RECEPTOR_BASE_URL: http://mock-arca:5001/receptor
+      SCHEDULER_ENABLED: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-arca:
+        condition: service_started
+    restart: unless-stopped
+
+  mock-arca:
+    build: .
+    image: arca-sync-monitor-api:latest
+    command: ["python", "-m", "mock_arca.app"]
+    environment:
+      PORT: "5001"
+      ARCA_CUIT: ${ARCA_CUIT:-20123456789}
+      RECEPTOR_API_KEY: ${RECEPTOR_API_KEY:-receptor-dev-key}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-webhook-dev-secret}
+      MOCK_WEBHOOK_URL: http://api:8000/webhooks/receptor
+      MOCK_FAILURE_RATE: "0.1"
+    ports:
+      - "5001:5001"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arca
+      POSTGRES_PASSWORD: arca
+      POSTGRES_DB: arca_sync
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arca -d arca_sync"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
